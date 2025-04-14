@@ -16,14 +16,32 @@ document.addEventListener('DOMContentLoaded', () => {
             messageDiv.appendChild(para);
         });
 
+        // Only add typing indicator for assistant messages
+        if (!isUser) {
+            const typing = document.createElement('div');
+            typing.className = 'typing-animation hidden';
+            typing.innerHTML = `
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            `;
+            messageDiv.appendChild(typing);
+        }
+
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
+        return messageDiv;
     };
 
     const setLoading = (isLoading) => {
         sendButton.disabled = isLoading;
         userInput.disabled = isLoading;
-        typingIndicator.classList.toggle('hidden', !isLoading);
+
+        // Toggle typing animation on the last assistant message
+        const lastMessage = chatContainer.querySelector('.message.assistant-message:last-child');
+        if (lastMessage) {
+            lastMessage.querySelector('.typing-animation')?.classList.toggle('hidden', !isLoading);
+        }
     };
 
     const handleSubmit = async () => {
@@ -38,28 +56,73 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoading(true);
 
         try {
-            const response = await fetch('/api/chat', {
+            // Create response message container
+            const responseDiv = addMessage('', false);
+            let currentParagraph = document.createElement('p');
+            responseDiv.appendChild(currentParagraph);
+            let responseText = '';
+
+            // Make POST request with streaming
+            const response = await fetch('/api/chat-stream', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({ message })
             });
 
-            const data = await response.json();
+            // Check if response was not ok (error status code)
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'An error occurred while getting a response');
+            }
 
-            if (data.answer) {
-                addMessage(data.answer, false);
-                if (data.sources && data.sources.length > 0) {
-                    const sourceDiv = document.createElement('div');
-                    sourceDiv.className = 'source-citation';
-                    sourceDiv.textContent = `Sources: ${data.sources.join(', ')}`;
-                    chatContainer.lastElementChild.appendChild(sourceDiv);
+            // Set up streaming response handler
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            try {
+                while (true) {
+                    const {value, done} = await reader.read();
+                    if (done) break;
+
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+
+                    lines.forEach(line => {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') {
+                                setLoading(false);
+                                return;
+                            }
+
+                            // Handle sources separately
+                            if (data.startsWith('Sources:')) {
+                                const sourceDiv = document.createElement('div');
+                                sourceDiv.className = 'source-citation';
+                                sourceDiv.textContent = data;
+                                responseDiv.appendChild(sourceDiv);
+                                return;
+                            }
+
+                            // Append word and add space
+                            responseText += data + ' ';
+                            currentParagraph.textContent = responseText;
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        }
+                    });
                 }
+            } catch (error) {
+                console.error('Stream reading error:', error);
+                if (!responseText) {
+                    currentParagraph.textContent = 'Error: Unable to get response';
+                }
+                setLoading(false);
             }
         } catch (error) {
             addMessage('Error: Unable to get response', false);
             console.error('Error:', error);
-        } finally {
-            // Re-enable input
             setLoading(false);
         }
     };

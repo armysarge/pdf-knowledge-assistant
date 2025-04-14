@@ -127,16 +127,17 @@ class ChatInterface:
         )
 
         # Create a custom prompt template that instructs the model to answer directly
-        qa_template = """You are a helpful PDF Knowledge Assistant that provides 100% accurate information from documents.
+        qa_template = """You are a helpful PDF Knowledge Assistant that provides accurate information from documents.
 
-Context information is below.
+Here is the relevant information:
 ---------------------
 {context}
 ---------------------
 
-Given the context information and not prior knowledge, answer the question if possible.
-IMPORTANT: Do not rephrase the question in your answer. Do not start your answer with a question.
-Just provide the information the user is looking for.
+Answer the question using only the information provided above. Do not:
+- Start with "Based on..." or reference the context
+- Rephrase the question
+- Start with a question
 
 Question: {question}
 Answer: """

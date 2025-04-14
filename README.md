@@ -19,7 +19,7 @@ A Python application that processes PDFs to train a local AI, enabling conversat
 - **Vector Database**: Stores document embeddings locally for fast retrieval
 - **Interactive Chat**: Simple command-line interface to ask questions about your documents
 - **REST API**: Access the knowledge assistant through a web API for integration with other applications
-- **GPU Acceleration**: Optional CUDA support for faster inference on NVIDIA GPUs
+- **GPU Acceleration**: Optional CUDA support for faster inference on NVIDIA GPUs (Needs CUDA Toolkit installed)
 
 ## Requirements
 

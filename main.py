@@ -15,6 +15,8 @@ from src.pdf_processor import PDFProcessor
 from src.knowledge_base import KnowledgeBase
 from src.chat_interface import ChatInterface
 
+import uvicorn
+
 app = typer.Typer()
 
 @app.command()
@@ -72,7 +74,6 @@ def api_server(
     reload: bool = typer.Option(False, help="Enable auto-reload for development")
 ):
     """Start the REST API server"""
-    import uvicorn
     typer.echo(f"Starting API server at http://{host}:{port}")
     typer.echo("Press CTRL+C to stop the server")
     uvicorn.run("src.api:app", host=host, port=port, reload=reload)

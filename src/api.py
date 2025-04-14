@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -21,6 +21,11 @@ app = FastAPI(title="PDF Knowledge Assistant API")
 # Mount static files
 static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 app.mount("/static", StaticFiles(directory=static_path), name="static")
+
+# Add root route to serve index.html
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    return FileResponse(os.path.join(static_path, "index.html"))
 
 # Add CORS middleware
 app.add_middleware(
@@ -49,6 +54,13 @@ class QueryResponse(BaseModel):
 class StatusResponse(BaseModel):
     status: str
     message: str
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: List[str] = []
 
 # Background processing task
 def process_pdfs_task(force_rebuild: bool = False):
@@ -131,6 +143,14 @@ async def query(request: QueryRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest):
+    if not chat_interface:
+        raise HTTPException(status_code=400, detail="Chat interface not initialized. Please ensure the knowledge base is ready.")
+
+    answer, sources = chat_interface.get_response(request.message)
+    return ChatResponse(answer=answer, sources=sources)
 
 @app.get("/status", response_model=StatusResponse)
 async def status():

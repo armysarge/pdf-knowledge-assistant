@@ -1,81 +1,57 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const chatForm = document.getElementById('chat-form');
+    const chatContainer = document.getElementById('chat-container');
     const userInput = document.getElementById('user-input');
-    const chatMessages = document.getElementById('chat-messages');
+    const sendButton = document.getElementById('send-button');
+    const typingIndicator = document.getElementById('typing-indicator');
 
-    function createMessage(content, isUser) {
-        const div = document.createElement('div');
-        div.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-        div.textContent = content;
-        return div;
-    }
+    const addMessage = (content, isUser) => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+        messageDiv.textContent = content;
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
 
-    function createTypingIndicator() {
-        const div = document.createElement('div');
-        div.className = 'typing-indicator assistant-message';
-        div.innerHTML = `
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-        `;
-        return div;
-    }
-
-    chatForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const question = userInput.value.trim();
-        if (!question) return;
+    const handleSubmit = async () => {
+        const message = userInput.value.trim();
+        if (!message) return;
 
         // Add user message
-        chatMessages.appendChild(createMessage(question, true));
+        addMessage(message, true);
         userInput.value = '';
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        // Add typing indicator
-        const typingIndicator = createTypingIndicator();
-        chatMessages.appendChild(typingIndicator);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        typingIndicator.classList.remove('hidden');
 
         try {
-            const response = await fetch('/query', {
+            const response = await fetch('/api/chat', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ query: question })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
             });
 
             const data = await response.json();
+            typingIndicator.classList.add('hidden');
 
-            // Remove typing indicator
-            typingIndicator.remove();
-
-            // Add assistant response
-            chatMessages.appendChild(createMessage(data.answer, false));
-
-            // Add sources if available
-            if (data.sources && data.sources.length > 0) {
-                const sourcesDiv = document.createElement('div');
-                sourcesDiv.className = 'text-xs text-gray-500 mt-2 ml-4';
-                sourcesDiv.innerHTML = '<strong>Sources:</strong><br>' +
-                    data.sources.map(s => `- ${s}`).join('<br>');
-                chatMessages.appendChild(sourcesDiv);
+            if (data.answer) {
+                addMessage(data.answer, false);
+                if (data.sources && data.sources.length > 0) {
+                    const sourceDiv = document.createElement('div');
+                    sourceDiv.className = 'source-citation';
+                    sourceDiv.textContent = `Sources: ${data.sources.join(', ')}`;
+                    chatContainer.lastElementChild.appendChild(sourceDiv);
+                }
             }
         } catch (error) {
-            typingIndicator.remove();
-            chatMessages.appendChild(
-                createMessage('Sorry, there was an error processing your request.', false)
-            );
+            typingIndicator.classList.add('hidden');
+            addMessage('Error: Unable to get response', false);
+            console.error('Error:', error);
         }
+    };
 
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    });
-
-    // Handle Ctrl+Enter to submit
-    userInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && e.ctrlKey) {
-            chatForm.dispatchEvent(new Event('submit'));
+    sendButton.addEventListener('click', handleSubmit);
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
         }
     });
 });

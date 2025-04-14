@@ -200,3 +200,27 @@ Answer: """
             except Exception as e:
                 self.console.print(f"\n[red]Error during conversation: {e}[/red]")
                 continue
+
+    def get_response(self, query: str) -> tuple[str, list[str]]:
+        """
+        Get a response for a single query.
+
+        Args:
+            query: The user's question
+
+        Returns:
+            Tuple of (response text, list of sources)
+        """
+        if not self.chain:
+            raise RuntimeError("Knowledge base not initialized. Please process PDFs first.")
+
+        result = self.chain.invoke(query)
+
+        # Get sources from the current docs
+        sources = []
+        if self.current_source_docs:
+            for doc in self.current_source_docs:
+                if "source" in doc.metadata:
+                    sources.append(doc.metadata["source"])
+
+        return result, list(set(sources))

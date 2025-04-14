@@ -46,8 +46,10 @@ class KnowledgeBase:
                 )
                 return True
             except Exception as e:
-                print(f"Error loading vector store: {e}")
+                print(f"Error loading vector store from {index_path}: {e}")
+                self.vector_store = None
                 return False
+        print(f"No vector store found at {index_path}")
         return False
 
     def check_knowledge_base_exists(self) -> bool:
@@ -57,7 +59,10 @@ class KnowledgeBase:
         Returns:
             Boolean indicating if the knowledge base exists
         """
-        return self.vector_store is not None
+        exists = self.vector_store is not None
+        print(f"Knowledge base exists: {exists}")
+        print(f"Vector store: {self.vector_store}")
+        return exists
 
     def add_documents(self, documents: List[Dict[str, Any]], force_rebuild: bool = False) -> None:
         """

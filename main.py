@@ -63,6 +63,8 @@ def chat(
     """Start an interactive chat session with the knowledge base"""
     kb = KnowledgeBase()
 
+    chat_interface = None
+
     # Check if knowledge base exists
     if not kb.check_knowledge_base_exists():
         typer.echo("Knowledge base not found. Please process PDFs first using 'process-pdfs' command.")

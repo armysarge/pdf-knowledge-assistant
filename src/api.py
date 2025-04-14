@@ -36,9 +36,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize knowledge base
+# Initialize knowledge base and chat interface
 kb = KnowledgeBase()
 chat_interface = None
+
+def initialize_chat_interface():
+    """Initialize the chat interface if knowledge base exists"""
+    global chat_interface
+    if kb.check_knowledge_base_exists():
+        chat_interface = ChatInterface(kb)
+        return True
+    return False
+
+# Try to initialize chat interface
+initialize_chat_interface()
 
 # Request and response models
 class QueryRequest(BaseModel):
@@ -63,24 +74,17 @@ async def stream_chat_response(message: str):
 
         yield "data: [DONE]\n\n"
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        error_msg = str(e)
+        yield f"data: Error: {error_msg}\n\n"
+        yield "data: [DONE]\n\n"
 
 @app.post("/api/chat-stream")
 async def chat_stream(query: QueryRequest):
     """Stream a response from the chat interface"""
-    if not chat_interface:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized. Please process PDFs first by adding PDFs to the data/pdfs directory and calling the /process-pdfs endpoint."
-        )
-
-    if not kb.check_knowledge_base_exists():
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not found. Please add PDFs to the data/pdfs directory and call the /process-pdfs endpoint."
+    if not chat_interface or not kb.check_knowledge_base_exists():
+        return StreamingResponse(
+            iter([f"data: Knowledge base not initialized. Please process PDFs first by adding PDFs to the data/pdfs directory and calling the /process-pdfs endpoint.\n\ndata: [DONE]\n\n"]),
+            media_type="text/event-stream"
         )
 
     return StreamingResponse(
@@ -101,7 +105,6 @@ async def get_status():
 async def process_pdfs(request: ProcessPDFRequest, background_tasks: BackgroundTasks):
     """Process PDFs in the background"""
     global chat_interface
-
     processor = PDFProcessor()
     pdf_dir = "data/pdfs"
 
@@ -120,5 +123,12 @@ async def process_pdfs(request: ProcessPDFRequest, background_tasks: BackgroundT
 
     # Initialize chat interface after processing
     chat_interface = ChatInterface(kb)
+
+    # Verify initialization was successful
+    if not chat_interface or not kb.check_knowledge_base_exists():
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to initialize chat interface after processing PDFs."
+        )
 
     return {"status": "success", "message": f"Processed {len(documents)} documents"}

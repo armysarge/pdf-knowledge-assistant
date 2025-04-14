@@ -39,9 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Toggle typing animation on the last assistant message
         const lastMessage = chatContainer.querySelector('.message.assistant-message:last-child');
-        if (lastMessage) {
-            lastMessage.querySelector('.typing-animation')?.classList.toggle('hidden', !isLoading);
-        }
+        if (lastMessage)
+            lastMessage.querySelector('.typing-animation')?.remove();
     };
 
     const handleSubmit = async () => {
@@ -71,10 +70,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ message })
             });
 
+            const data = await response.json();
+
             // Check if response was not ok (error status code)
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'An error occurred while getting a response');
+            if (!response.ok || data.error) {
+                setLoading(false);
+                throw new Error(data.error || data.detail || 'An error occurred while getting a response');
             }
 
             // Set up streaming response handler
@@ -116,13 +117,18 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error('Stream reading error:', error);
                 if (!responseText) {
-                    currentParagraph.textContent = 'Error: Unable to get response';
+                    currentParagraph.textContent = error.message || 'Error: Unable to get response';
                 }
                 setLoading(false);
             }
         } catch (error) {
-            addMessage('Error: Unable to get response', false);
-            console.error('Error:', error);
+            //update last message with error
+            const lastMessage = chatContainer.querySelector('.message.assistant-message:last-child');
+            if (lastMessage) {
+                const errorParagraph = document.createElement('p');
+                errorParagraph.textContent = error.message || 'Error: Unable to get response';
+                lastMessage.appendChild(errorParagraph);
+            }
             setLoading(false);
         }
     };

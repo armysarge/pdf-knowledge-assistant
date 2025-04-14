@@ -7,9 +7,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const addMessage = (content, isUser) => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-        messageDiv.textContent = content;
+
+        // Split content by newlines and create paragraphs
+        const paragraphs = content.split('\n').filter(p => p.trim());
+        paragraphs.forEach(p => {
+            const para = document.createElement('p');
+            para.textContent = p;
+            messageDiv.appendChild(para);
+        });
+
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
+
+    const setLoading = (isLoading) => {
+        sendButton.disabled = isLoading;
+        userInput.disabled = isLoading;
+        typingIndicator.classList.toggle('hidden', !isLoading);
     };
 
     const handleSubmit = async () => {
@@ -19,7 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add user message
         addMessage(message, true);
         userInput.value = '';
-        typingIndicator.classList.remove('hidden');
+
+        // Disable input and show loading state
+        setLoading(true);
 
         try {
             const response = await fetch('/api/chat', {
@@ -29,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const data = await response.json();
-            typingIndicator.classList.add('hidden');
 
             if (data.answer) {
                 addMessage(data.answer, false);
@@ -41,9 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } catch (error) {
-            typingIndicator.classList.add('hidden');
             addMessage('Error: Unable to get response', false);
             console.error('Error:', error);
+        } finally {
+            // Re-enable input
+            setLoading(false);
         }
     };
 

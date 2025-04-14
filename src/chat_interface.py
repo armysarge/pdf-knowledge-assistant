@@ -58,7 +58,7 @@ class ChatInterface:
 
         # Default model if none provided
         model_name = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
-        model_filename = "mistral-7b-instruct-v0.2.Q8_0.gguf"
+        model_filename = "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
 
         # Path to save the model
         models_dir = os.path.join("data", "models")
@@ -134,7 +134,7 @@ Context information is below.
 {context}
 ---------------------
 
-Given the context information and not prior knowledge, answer the question directly and concisely.
+Given the context information and not prior knowledge, answer the question if possible.
 IMPORTANT: Do not rephrase the question in your answer. Do not start your answer with a question.
 Just provide the information the user is looking for.
 

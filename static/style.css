@@ -27,6 +27,14 @@
     animation: fadeIn 0.3s ease-in;
 }
 
+.message p {
+    margin-bottom: 0.5rem;
+}
+
+.message p:last-child {
+    margin-bottom: 0;
+}
+
 .user-message {
     background-color: #e5e7eb;
     margin-left: 2rem;
@@ -42,6 +50,12 @@
     color: #4b5563;
     margin-top: 0.5rem;
     font-style: italic;
+}
+
+button:disabled,
+textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 @keyframes fadeIn {

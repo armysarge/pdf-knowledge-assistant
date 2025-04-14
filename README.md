@@ -22,7 +22,7 @@ A Python application that processes PDFs to train a local AI, enabling conversat
 
 - Python 3.8 or higher
 - 32GB RAM (recommended) for optimal LLM performance
-- Sufficient disk space for the LLM model (~5GB)
+- Sufficient disk space for the LLM model (~15GB)
 
 ## Installation
 

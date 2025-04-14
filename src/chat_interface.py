@@ -55,8 +55,8 @@ class ChatInterface:
             return model_path
 
         # Default model if none provided
-        model_name = "TheBloke/Mistral-7B-Instruct-v0.3-GGUF"
-        model_filename = "mistral-7b-instruct-v0.3.Q4_K_M.gguf"
+        model_name = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
+        model_filename = "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
 
         # Path to save the model
         models_dir = os.path.join("data", "models")

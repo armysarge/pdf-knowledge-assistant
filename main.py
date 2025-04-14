@@ -54,6 +54,10 @@ def chat(
     debug: bool = typer.Option(
         False,
         help="Show debug information and performance metrics"
+    ),
+    web: bool = typer.Option(
+        False,
+        help="Launch web interface instead of terminal chat"
     )
 ):
     """Start an interactive chat session with the knowledge base"""
@@ -64,8 +68,13 @@ def chat(
         typer.echo("Knowledge base not found. Please process PDFs first using 'process-pdfs' command.")
         return
 
-    chat_interface = ChatInterface(kb, model_path, debug=debug)
-    chat_interface.start_interactive_chat()
+    if web:
+        # Start the web interface using the API server
+        typer.echo("Starting web interface...")
+        uvicorn.run("src.api:app", host="127.0.0.1", port=8000)
+    else:
+        chat_interface = ChatInterface(kb, model_path, debug=debug)
+        chat_interface.start_interactive_chat()
 
 @app.command()
 def api_server(

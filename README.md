@@ -112,6 +112,22 @@ Command-line options:
 - `--model-path`: Specify a custom path to a local LLM model
 - `--debug`: Show performance metrics and debug information
 
+### Using the Web Interface
+
+You can now use a modern web interface to interact with the knowledge base:
+
+```bash
+python main.py chat --web
+```
+
+This will start a local web server at http://127.0.0.1:8000 with a user-friendly interface for asking questions about your PDFs.
+
+Features:
+- Clean, modern design with animations
+- Real-time chat interface
+- Displays source documents for answers
+- Support for Ctrl+Enter to send messages
+
 ### Using the REST API
 
 Start the API server:

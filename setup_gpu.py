@@ -11,7 +11,7 @@ def main():
     print("Starting setup for GPU-enabled llama-cpp-python...")
 
     # Set environment variables for CUDA support
-    os.environ["CMAKE_ARGS"] = "-DLLAMA_CUBLAS=on"
+    os.environ["CMAKE_ARGS"] = "-DGGML_CUDA=on"
     os.environ["FORCE_CMAKE"] = "1"
 
     # Uninstall existing package

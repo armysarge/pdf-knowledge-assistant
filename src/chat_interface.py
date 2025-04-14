@@ -33,7 +33,8 @@ class ChatInterface:
             knowledge_base: The knowledge base to query
             model_path: Optional path to local LLM model (downloads model if not provided)
             debug: Whether to show debug information like performance metrics
-        """        self.knowledge_base = knowledge_base
+        """
+        self.knowledge_base = knowledge_base
         self.console = Console()
         self.debug = debug
         self.model_path = self._get_model_path(model_path)

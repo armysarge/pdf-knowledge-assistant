@@ -1,6 +1,8 @@
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-brightgreen?logo=buymeacoffee)](https://www.buymeacoffee.com/armysarge)
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
+[![CUDA](https://img.shields.io/badge/CUDA-Optional-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![Mistral](https://img.shields.io/badge/Mistral_7B-LLM-orange.svg)](https://mistral.ai)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GitHub issues](https://img.shields.io/github/issues/armysarge/pdf-knowledge-assistant)](https://github.com/armysarge/pdf-knowledge-assistant/issues)
@@ -17,12 +19,17 @@ A Python application that processes PDFs to train a local AI, enabling conversat
 - **Vector Database**: Stores document embeddings locally for fast retrieval
 - **Interactive Chat**: Simple command-line interface to ask questions about your documents
 - **REST API**: Access the knowledge assistant through a web API for integration with other applications
+- **GPU Acceleration**: Optional CUDA support for faster inference on NVIDIA GPUs
 
 ## Requirements
 
 - Python 3.8 or higher
 - 32GB RAM (recommended) for optimal LLM performance
-- Sufficient disk space for the LLM model (~8GB)
+- Sufficient disk space for the LLM model (~5GB)
+- For GPU acceleration (optional):
+  - NVIDIA GPU with CUDA support
+  - CUDA Toolkit 11.x or 12.x
+  - Compatible NVIDIA drivers
 
 ## Installation
 
@@ -48,6 +55,12 @@ python -m venv venv
 
 ```powershell
 pip install -r requirements.txt
+```
+
+5. (Optional) Enable GPU acceleration:
+
+```powershell
+python setup_gpu.py
 ```
 
 ## Usage
@@ -95,6 +108,10 @@ During the chat session:
 - Sources will be cited for each response
 - Type 'exit' or 'quit' to end the session
 
+Command-line options:
+- `--model-path`: Specify a custom path to a local LLM model
+- `--debug`: Show performance metrics and debug information
+
 ### Using the REST API
 
 Start the API server:
@@ -108,6 +125,11 @@ The API will be available at `http://localhost:8000` with the following endpoint
 - `GET /status` - Check if the knowledge base is ready
 - `POST /process-pdfs` - Process PDFs in the background
 - `POST /query` - Ask a question about your documents
+
+Command-line options:
+- `--host`: Host address to bind the API server (default: 0.0.0.0)
+- `--port`: Port to bind the API server (default: 8000)
+- `--reload`: Enable auto-reload for development
 
 #### Example API Usage
 
@@ -143,4 +165,32 @@ python api_test.py
    - Sends your question and the relevant document chunks to the local LLM
    - Returns the LLM's response along with source citations
 
-4. **Local LLM**: The application uses `LlamaCpp` to run the Mistral 7B Instruct model locally on your machine, with optimizations for systems with 16GB RAM (largely dependent on the model).
+4. **Local LLM**: The application uses `LlamaCpp` to run the Mistral 7B Instruct model locally on your machine, with optimizations for GPU acceleration when available.
+
+## Performance Tips
+
+1. **GPU Acceleration**: If you have an NVIDIA GPU, run `setup_gpu.py` to enable CUDA support for significantly faster inference.
+
+2. **Memory Usage**: The application automatically adjusts model settings based on available RAM. More RAM allows for:
+   - Larger context windows
+   - Faster processing
+   - Better response quality
+
+3. **Model Selection**: By default, we use Mistral 7B for its excellent balance of performance and resource usage. You can use `--model-path` to specify a different model if needed.
+
+## Troubleshooting
+
+1. **GPU Issues**:
+   - Ensure NVIDIA drivers are up to date
+   - Verify CUDA installation with `nvidia-smi`
+   - Check CUDA version compatibility
+
+2. **Memory Issues**:
+   - Close unnecessary applications
+   - Monitor RAM usage during operation
+   - Consider reducing model context size
+
+3. **PDF Processing**:
+   - Ensure PDFs are text-based, not scanned images
+   - Check PDF permissions and encryption
+   - Verify file encoding

@@ -7,7 +7,7 @@ from typing import List, Optional
 from rich.console import Console
 from rich.markdown import Markdown
 import sys
-
+from contextlib import redirect_stderr
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -17,8 +17,10 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain_community.llms import LlamaCpp
 from langchain.memory import ConversationBufferMemory
 from huggingface_hub import hf_hub_download
-
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain.schema import BaseChatMessageHistory
 from src.knowledge_base import KnowledgeBase
+from langchain_core.messages import HumanMessage, AIMessage
 
 class ChatInterface:
     """Interface for chatting with the knowledge base using a local LLM."""
@@ -31,19 +33,13 @@ class ChatInterface:
             knowledge_base: The knowledge base to query
             model_path: Optional path to local LLM model (downloads model if not provided)
             debug: Whether to show debug information like performance metrics
-        """
-        self.knowledge_base = knowledge_base
+        """        self.knowledge_base = knowledge_base
         self.console = Console()
         self.debug = debug
         self.model_path = self._get_model_path(model_path)
         self.llm = self._load_llm()
-        # Using imports compatible with your current langchain version
-        from langchain_community.chat_message_histories import ChatMessageHistory
-        from langchain.schema import BaseChatMessageHistory
-
+        self.current_source_docs = []  # Track current source documents
         self.message_history = ChatMessageHistory()
-        # This will be used later when setting up the chain with message history
-
         self.chain = self._create_conversation_chain()
 
     def _get_model_path(self, model_path: Optional[str]) -> str:
@@ -91,11 +87,6 @@ class ChatInterface:
         self.console.print("[yellow]Loading LLM model... This may take a minute...[/yellow]")
 
         callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])        # Load the model with appropriate settings for a machine with 32GB RAM
-        # Try to use GPU acceleration - adjusted settings for better GPU detection
-        import os
-        # Temporarily redirect stderr to suppress the context size warning
-        import sys
-        from contextlib import redirect_stderr
 
         # Create a null device to discard stderr output temporarily
         with open(os.devnull, 'w') as null_stderr:
@@ -153,8 +144,14 @@ Answer: """
             template=qa_template,
             input_variables=["context", "question"]
         )        # Create the chain using LCEL (LangChain Expression Language)
+        # Create a chain that also preserves source documents
+        def format_docs(docs):
+            # Keep track of source documents and return formatted context
+            self.current_source_docs = docs
+            return "\n\n".join(doc.page_content for doc in docs)
+
         chain = (
-            {"context": retriever, "question": RunnablePassthrough()}
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
             | qa_prompt
             | self.llm
             | StrOutputParser()
@@ -168,12 +165,8 @@ Answer: """
             self.console.print("[red]Error: Knowledge base not initialized. Please process PDFs first.[/red]")
             return
 
-        self.console.print("[bold green]PDF Knowledge Assistant[/bold green]")
+        self.console.print("\n\n[bold green]PDF Knowledge Assistant[/bold green]")
         self.console.print("Chat with your documents! Type 'exit' or 'quit' to end the session.\n")
-
-        # Create a session history for this chat session
-        from langchain.memory import ConversationBufferMemory
-        from langchain_core.messages import HumanMessage, AIMessage
 
         chat_history = []
         while True:
@@ -187,9 +180,17 @@ Answer: """
                 continue
             try:
                 self.console.print("\n[AI]: ", end="")
-
                 # Invoke chain with the query
                 result = self.chain.invoke(query)
+
+                # Display sources after response
+                if self.current_source_docs:
+                    sources = set()
+                    for doc in self.current_source_docs:
+                        if "source" in doc.metadata:
+                            sources.add(doc.metadata["source"])
+                    if sources:
+                        self.console.print("\n[dim]Sources: " + ", ".join(sources) + "[/dim]")
 
                 # Update chat history for next iteration
                 chat_history.append(HumanMessage(content=query))

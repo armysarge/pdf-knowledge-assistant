@@ -48,6 +48,10 @@ def chat(
     model_path: Optional[str] = typer.Option(
         None,
         help="Path to local LLM model (will download from Hugging Face if not provided)"
+    ),
+    debug: bool = typer.Option(
+        False,
+        help="Show debug information and performance metrics"
     )
 ):
     """Start an interactive chat session with the knowledge base"""
@@ -58,7 +62,7 @@ def chat(
         typer.echo("Knowledge base not found. Please process PDFs first using 'process-pdfs' command.")
         return
 
-    chat_interface = ChatInterface(kb, model_path)
+    chat_interface = ChatInterface(kb, model_path, debug=debug)
     chat_interface.start_interactive_chat()
 
 @app.command()

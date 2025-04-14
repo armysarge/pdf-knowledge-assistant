@@ -6,8 +6,8 @@ import os
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-from langchain.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 
 class KnowledgeBase:
     """Manages the vector database for document retrieval."""
@@ -41,7 +41,8 @@ class KnowledgeBase:
             try:
                 self.vector_store = FAISS.load_local(
                     index_path,
-                    self.embedding_model
+                    self.embedding_model,
+                    allow_dangerous_deserialization=True
                 )
                 return True
             except Exception as e:

@@ -8,10 +8,13 @@ from rich.console import Console
 from rich.markdown import Markdown
 import sys
 
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain.chains import ConversationalRetrievalChain
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.chains import ConversationalRetrievalChain
-from langchain.llms import LlamaCpp
+from langchain_community.llms import LlamaCpp
 from langchain.memory import ConversationBufferMemory
 from huggingface_hub import hf_hub_download
 
@@ -20,24 +23,26 @@ from src.knowledge_base import KnowledgeBase
 class ChatInterface:
     """Interface for chatting with the knowledge base using a local LLM."""
 
-    def __init__(self, knowledge_base: KnowledgeBase, model_path: Optional[str] = None):
+    def __init__(self, knowledge_base: KnowledgeBase, model_path: Optional[str] = None, debug: bool = False):
         """
         Initialize the chat interface with a knowledge base and optional model path.
 
         Args:
             knowledge_base: The knowledge base to query
             model_path: Optional path to local LLM model (downloads model if not provided)
+            debug: Whether to show debug information like performance metrics
         """
         self.knowledge_base = knowledge_base
         self.console = Console()
-
+        self.debug = debug
         self.model_path = self._get_model_path(model_path)
         self.llm = self._load_llm()
+        # Using imports compatible with your current langchain version
+        from langchain_community.chat_message_histories import ChatMessageHistory
+        from langchain.schema import BaseChatMessageHistory
 
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
+        self.message_history = ChatMessageHistory()
+        # This will be used later when setting up the chain with message history
 
         self.chain = self._create_conversation_chain()
 
@@ -85,21 +90,31 @@ class ChatInterface:
         """
         self.console.print("[yellow]Loading LLM model... This may take a minute...[/yellow]")
 
-        callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+        callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])        # Load the model with appropriate settings for a machine with 32GB RAM
+        # Try to use GPU acceleration - adjusted settings for better GPU detection
+        import os
+        # Temporarily redirect stderr to suppress the context size warning
+        import sys
+        from contextlib import redirect_stderr
 
-        # Load the model with appropriate settings for a machine with 32GB RAM
-        llm = LlamaCpp(
-            model_path=self.model_path,
-            temperature=0.1,
-            max_tokens=2048,
-            n_ctx=4096,
-            top_p=0.95,
-            callback_manager=callback_manager,
-            verbose=False,
-            n_gpu_layers=33,  # Use GPU if available
-            n_batch=512,  # Adjust batch size for efficiency
-            f16_kv=True  # Use half-precision for key/value cache
-        )
+        # Create a null device to discard stderr output temporarily
+        with open(os.devnull, 'w') as null_stderr:
+            with redirect_stderr(null_stderr):
+                llm = LlamaCpp(
+                    model_path=self.model_path,
+                    temperature=0.1,
+                    max_tokens=2048,
+                    n_ctx=32768,
+                    top_p=0.95,
+                    callback_manager=callback_manager,
+                    verbose=self.debug,  # Only show performance metrics in debug mode
+                    n_gpu_layers=-1,  # Use all possible layers on GPU
+                    n_batch=512,  # Batch size for efficiency
+                    f16_kv=True,  # Use half-precision for key/value cache
+                    seed=42,  # Fixed seed for reproducibility
+                    use_mlock=True,  # Lock memory to prevent swapping
+                    n_threads=8  # Adjust based on your CPU cores
+                )
 
         self.console.print("[green]LLM model loaded successfully![/green]")
         return llm
@@ -119,12 +134,30 @@ class ChatInterface:
             search_kwargs={"k": 4}
         )
 
-        chain = ConversationalRetrievalChain.from_llm(
-            llm=self.llm,
-            retriever=retriever,
-            memory=self.memory,
-            return_source_documents=True,
-            verbose=False
+        # Create a custom prompt template that instructs the model to answer directly
+        qa_template = """You are a helpful PDF Knowledge Assistant that provides 100% accurate information from documents.
+
+Context information is below.
+---------------------
+{context}
+---------------------
+
+Given the context information and not prior knowledge, answer the question directly and concisely.
+IMPORTANT: Do not rephrase the question in your answer. Do not start your answer with a question.
+Just provide the information the user is looking for.
+
+Question: {question}
+Answer: """
+
+        qa_prompt = PromptTemplate(
+            template=qa_template,
+            input_variables=["context", "question"]
+        )        # Create the chain using LCEL (LangChain Expression Language)
+        chain = (
+            {"context": retriever, "question": RunnablePassthrough()}
+            | qa_prompt
+            | self.llm
+            | StrOutputParser()
         )
 
         return chain
@@ -138,6 +171,11 @@ class ChatInterface:
         self.console.print("[bold green]PDF Knowledge Assistant[/bold green]")
         self.console.print("Chat with your documents! Type 'exit' or 'quit' to end the session.\n")
 
+        # Create a session history for this chat session
+        from langchain.memory import ConversationBufferMemory
+        from langchain_core.messages import HumanMessage, AIMessage
+
+        chat_history = []
         while True:
             query = input("\n[You]: ")
 
@@ -147,21 +185,15 @@ class ChatInterface:
 
             if not query.strip():
                 continue
-
             try:
                 self.console.print("\n[AI]: ", end="")
-                result = self.chain({"question": query})
 
-                # Print sources after response
-                source_docs = result.get("source_documents", [])
-                if source_docs:
-                    sources = set()
-                    for doc in source_docs:
-                        if "source" in doc.metadata:
-                            sources.add(doc.metadata["source"])
+                # Invoke chain with the query
+                result = self.chain.invoke(query)
 
-                    if sources:
-                        self.console.print("\n\n[dim]Sources: " + ", ".join(sources) + "[/dim]")
+                # Update chat history for next iteration
+                chat_history.append(HumanMessage(content=query))
+                chat_history.append(AIMessage(content=result))
 
             except Exception as e:
                 self.console.print(f"\n[red]Error during conversation: {e}[/red]")

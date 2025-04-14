@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 from tqdm import tqdm
 
-from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 class PDFProcessor:

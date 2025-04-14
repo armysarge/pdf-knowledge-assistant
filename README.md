@@ -143,4 +143,4 @@ python api_test.py
    - Sends your question and the relevant document chunks to the local LLM
    - Returns the LLM's response along with source citations
 
-4. **Local LLM**: The application uses `LlamaCpp` to run the Mistral 7B Instruct model locally on your machine, with optimizations for systems with 32GB RAM.
+4. **Local LLM**: The application uses `LlamaCpp` to run the Mistral 7B Instruct model locally on your machine, with optimizations for systems with 16GB RAM (largely dependent on the model).

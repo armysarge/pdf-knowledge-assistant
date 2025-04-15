@@ -140,7 +140,9 @@ The API will be available at `http://localhost:8000` with the following endpoint
 
 - `GET /status` - Check if the knowledge base is ready
 - `POST /process-pdfs` - Process PDFs in the background
-- `POST /query` - Ask a question about your documents
+- `GET /api/chat-stream` - Stream a response to your query (GET method)
+- `POST /api/chat-stream` - Stream a response to your query (POST method)
+- `GET /test-stream` - Test the streaming functionality
 
 Command-line options:
 - `--host`: Host address to bind the API server (default: 0.0.0.0)
@@ -149,14 +151,44 @@ Command-line options:
 
 #### Example API Usage
 
+##### Regular Request
 ```python
 import requests
 
-# Query the API
-response = requests.post(
-    "http://localhost:8000/query",
-    json={"query": "What are the key points in the document?"}
+# Query the API with streaming support
+response = requests.get(
+    "http://localhost:8000/api/chat-stream",
+    params={"message": "What are the key points in the document?"}
 )
+
+# For POST method
+response = requests.post(
+    "http://localhost:8000/api/chat-stream",
+    json={"message": "What are the key points in the document?"}
+)
+```
+
+##### Streaming with Server-Sent Events (SSE)
+```python
+import requests
+import sseclient
+
+# Create an SSE client to receive streaming responses
+url = "http://localhost:8000/api/chat-stream"
+params = {"message": "What are the key points in the document?"}
+response = requests.get(url, params=params, stream=True)
+client = sseclient.SSEClient(response)
+
+# Process streaming response
+sources = []
+for event in client.events():
+    if event.data == "[DONE]":
+        break
+    elif event.data.startswith("SOURCES:"):
+        sources = event.data.replace("SOURCES:", "").split(", ")
+        print(f"Sources: {sources}")
+    else:
+        print(event.data, end="", flush=True)
 
 result = response.json()
 print(f"Answer: {result['answer']}")

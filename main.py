@@ -75,8 +75,10 @@ def chat(
         typer.echo("Starting web interface...")
         uvicorn.run("src.api:app", host="127.0.0.1", port=8000)
     else:
+        import asyncio
         chat_interface = ChatInterface(kb, model_path, debug=debug)
-        chat_interface.start_interactive_chat()
+        # Run the async function with asyncio.run()
+        asyncio.run(chat_interface.start_interactive_chat())
 
 @app.command()
 def api_server(

@@ -17,7 +17,7 @@ A Python application that processes PDFs to train a local AI, enabling conversat
 - **Local LLM**: Uses a free, high-quality open source LLM that runs on your local machine
 - **RAG System**: Implements Retrieval Augmented Generation to provide accurate answers
 - **Vector Database**: Stores document embeddings locally for fast retrieval
-- **Interactive Chat**: Simple command-line interface to ask questions about your documents
+- **Interactive Chat**: Simple command-line & web interface to ask questions about your documents
 - **REST API**: Access the knowledge assistant through a web API for integration with other applications
 - **GPU Acceleration**: Optional CUDA support for faster inference on NVIDIA GPUs (Needs CUDA Toolkit installed)
 
@@ -94,7 +94,7 @@ python main.py process-pdfs --force-rebuild
 
 ### Chatting with Your Documents
 
-Start an interactive chat session to ask questions about your documents:
+Start an interactive console chat session to ask questions about your documents:
 
 ```powershell
 python main.py chat
@@ -114,7 +114,7 @@ Command-line options:
 
 ### Using the Web Interface
 
-You can now use a modern web interface to interact with the knowledge base:
+You can also use the modern web interface to interact with the knowledge base:
 
 ```bash
 python main.py chat --web

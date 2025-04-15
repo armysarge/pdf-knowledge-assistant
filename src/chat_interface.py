@@ -58,7 +58,8 @@ class ChatInterface:
         self.console = Console()
         self.debug = debug
         self.model_path = self._get_model_path(model_path)
-        self.callback_handler = StreamingStdOutCallbackHandler()
+        # Use a custom non-printing callback handler to prevent duplicate output
+        self.callback_handler = StreamingCallbackHandler()
         self.llm = self._load_llm()
         self.streaming_llm = None  # Will be initialized on demand
         self.current_source_docs = []  # Track current source documents
@@ -151,45 +152,6 @@ Answer: """
 
         self.console.print("[green]LLM model loaded successfully![/green]")
         return llm
-
-    def start_interactive_chat(self):
-        """Start an interactive chat session with the user."""
-        self.console.print("\n\n[bold green]PDF Knowledge Assistant[/bold green]")
-        self.console.print("Chat with your documents! Type 'exit' or 'quit' to end the session.\n")
-
-        # Check if knowledge base exists
-        if not self.knowledge_base.check_knowledge_base_exists():
-            self.console.print("[red]Error: Knowledge base not initialized. Please process PDFs first.[/red]")
-            return
-
-        while True:
-            query = input("\n[You]: ")
-
-            if query.lower() in ["exit", "quit", "q"]:
-                self.console.print("[yellow]Exiting chat session. Goodbye![/yellow]")
-                break
-
-            if not query.strip():
-                continue
-
-            try:
-                self.console.print("\n[AI]: ", end="")
-
-                # Get response using the get_response method
-                result, sources = self.get_response(query)
-                self.console.print(result)
-
-                # Display sources after response
-                if sources:
-                    self.console.print("\n[dim]Sources: " + ", ".join(sources) + "[/dim]")
-
-                # Add to message history
-                self.message_history.add_user_message(query)
-                self.message_history.add_ai_message(result)
-
-            except Exception as e:
-                self.console.print(f"\n[red]Error during conversation: {e}[/red]")
-                continue
 
     def _load_streaming_llm(self):
         """
@@ -300,3 +262,129 @@ Answer: """
         # Stream tokens as they're generated
         async for token in self.streaming_handler.get_tokens():
             yield token, unique_sources
+
+    def start_interactive_chat(self):
+        """
+        Start an interactive console chat session with the knowledge base.
+
+        This function runs a loop that:
+        1. Prompts for user input
+        2. Gets a response from the LLM
+        3. Displays the response and sources
+        4. Maintains chat history
+
+        Type 'exit', 'quit', or 'bye' to end the session.
+        """
+        try:
+            self.console.print("[bold green]PDF Knowledge Assistant[/bold green]")
+            self.console.print("Ask questions about your PDFs. Type [bold]exit[/bold], [bold]quit[/bold], or [bold]bye[/bold] to end the session.\n")
+
+            if not self.knowledge_base.check_knowledge_base_exists():
+                self.console.print("[bold red]Error:[/bold red] Knowledge base not initialized. Please process PDFs first.")
+                return            # Main chat loop
+            while True:
+                # Get user input
+                self.console.print("[bold blue]You:[/bold blue]", end=" ")
+                user_input = input("")
+                user_input = user_input.strip()
+
+                # Check for exit commands
+                if user_input.lower() in ["exit", "quit", "bye"]:
+                    self.console.print("\n[italic]Ending chat session. Goodbye![/italic]")
+                    break
+
+                if not user_input:
+                    continue
+
+                # Add to message history
+                self.message_history.add_user_message(user_input)
+
+                # Display "thinking" indicator
+                with self.console.status("[italic]Thinking...[/italic]"):
+                    # Get response
+                    response, sources = self.get_response(user_input)
+
+                # Add to message history
+                self.message_history.add_ai_message(response)
+
+                # Display response
+                self.console.print("\n[bold green]Assistant:[/bold green]", end=" ")
+                self.console.print(response)
+
+                # Display sources if available
+                if sources:
+                    self.console.print("\n[bold yellow]Sources:[/bold yellow]")
+                    for i, source in enumerate(sources, 1):
+                        self.console.print(f"  {i}. {source}")
+
+                self.console.print()  # Empty line for readability
+
+        except KeyboardInterrupt:
+            self.console.print("\n\n[italic]Chat session interrupted. Goodbye![/italic]")
+        except Exception as e:
+            self.console.print(f"\n[bold red]Error:[/bold red] {str(e)}")
+
+    async def start_interactive_streaming_chat(self):
+        """
+        Start an interactive console chat session with streaming responses.
+
+        This function runs a loop that:
+        1. Prompts for user input
+        2. Streams the response from the LLM token by token
+        3. Displays the sources after the response
+        4. Maintains chat history
+
+        Type 'exit', 'quit', or 'bye' to end the session.
+        """
+        try:
+            self.console.print("[bold green]PDF Knowledge Assistant (Streaming Mode)[/bold green]")
+            self.console.print("Ask questions about your PDFs. Type [bold]exit[/bold], [bold]quit[/bold], or [bold]bye[/bold] to end the session.\n")
+
+            if not self.knowledge_base.check_knowledge_base_exists():
+                self.console.print("[bold red]Error:[/bold red] Knowledge base not initialized. Please process PDFs first.")
+                return
+
+            # Main chat loop
+            while True:
+                # Get user input
+                user_input = input("[bold blue]You:[/bold blue] ")
+                user_input = user_input.strip()
+
+                # Check for exit commands
+                if user_input.lower() in ["exit", "quit", "bye"]:
+                    self.console.print("\n[italic]Ending chat session. Goodbye![/italic]")
+                    break
+
+                if not user_input:
+                    continue
+
+                # Add to message history
+                self.message_history.add_user_message(user_input)
+
+                # Print assistant prefix
+                self.console.print("\n[bold green]Assistant:[/bold green] ", end="")
+
+                # Initialize response accumulator
+                full_response = ""
+                sources = []
+
+                # Stream response
+                async for token, sources in self.get_streaming_response(user_input):
+                    self.console.print(token, end="")
+                    full_response += token
+
+                # Add to message history
+                self.message_history.add_ai_message(full_response)
+
+                # Display sources if available
+                if sources:
+                    self.console.print("\n\n[bold yellow]Sources:[/bold yellow]")
+                    for i, source in enumerate(sources, 1):
+                        self.console.print(f"  {i}. {source}")
+
+                self.console.print("\n")  # Empty line for readability
+
+        except KeyboardInterrupt:
+            self.console.print("\n\n[italic]Chat session interrupted. Goodbye![/italic]")
+        except Exception as e:
+            self.console.print(f"\n[bold red]Error:[/bold red] {str(e)}")

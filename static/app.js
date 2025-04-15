@@ -2,142 +2,163 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatContainer = document.getElementById('chat-container');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
-    const typingIndicator = document.getElementById('typing-indicator');
 
-    const addMessage = (content, isUser) => {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-
-        // Split content by newlines and create paragraphs
-        const paragraphs = content.split('\n').filter(p => p.trim());
-        paragraphs.forEach(p => {
-            const para = document.createElement('p');
-            para.textContent = p;
-            messageDiv.appendChild(para);
+    // Check initial status
+    fetch('/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status !== 'ready') {
+                appendMessage('system', data.message);
+            }
+        })
+        .catch(error => {
+            appendMessage('error', 'Failed to connect to server');
         });
 
-        // Only add typing indicator for assistant messages
-        if (!isUser) {
-            const typing = document.createElement('div');
-            typing.className = 'typing-animation hidden';
-            typing.innerHTML = `
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-            `;
-            messageDiv.appendChild(typing);
+    function appendMessage(type, content, sources = null) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'p-4 rounded-lg ' +
+            (type === 'user' ? 'bg-blue-100' :
+             type === 'assistant' ? 'bg-gray-100' :
+             type === 'error' ? 'bg-red-100' : 'bg-yellow-100');
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'text-gray-800';
+
+        if (type === 'user') {
+            textDiv.innerHTML = `<span class="font-bold">You:</span> ${content}`;
+        } else if (type === 'assistant') {
+            textDiv.innerHTML = `<span class="font-bold">Assistant:</span> ${content}`;
+        } else if (type === 'error') {
+            textDiv.innerHTML = `<span class="font-bold text-red-600">Error:</span> ${content}`;
+        } else {
+            textDiv.innerHTML = `<span class="font-bold text-yellow-600">System:</span> ${content}`;
+        }
+
+        messageDiv.appendChild(textDiv);
+
+        if (sources) {
+            const sourcesDiv = document.createElement('div');
+            sourcesDiv.className = 'mt-2 text-sm text-gray-600 italic';
+            sourcesDiv.textContent = `Sources: ${sources}`;
+            messageDiv.appendChild(sourcesDiv);
         }
 
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
         return messageDiv;
-    };
+    }
 
-    const setLoading = (isLoading) => {
-        sendButton.disabled = isLoading;
-        userInput.disabled = isLoading;
+    function sendQuery() {
+        const query = userInput.value.trim();
+        if (!query) return;
 
-        // Toggle typing animation on the last assistant message
-        const lastMessage = chatContainer.querySelector('.message.assistant-message:last-child');
-        if (lastMessage)
-            lastMessage.querySelector('.typing-animation')?.remove();
-    };
-
-    const handleSubmit = async () => {
-        const message = userInput.value.trim();
-        if (!message) return;
+        // Disable input and button while processing
+        userInput.disabled = true;
+        sendButton.disabled = true;
+        sendButton.classList.add('opacity-50');
 
         // Add user message
-        addMessage(message, true);
+        appendMessage('user', query);
+
+        // Clear input
         userInput.value = '';
 
-        // Disable input and show loading state
-        setLoading(true);
+        // Create assistant message with loader
+        const assistantDiv = document.createElement('div');
+        assistantDiv.className = 'p-4 rounded-lg bg-gray-100';
 
-        try {
-            // Create response message container
-            const responseDiv = addMessage('', false);
-            let currentParagraph = document.createElement('p');
-            responseDiv.appendChild(currentParagraph);
-            let responseText = '';
+        const assistantContent = document.createElement('div');
+        assistantContent.className = 'text-gray-800';
+        assistantContent.innerHTML = `
+            <div class="flex items-center space-x-2">
+                <span class="font-bold">Assistant:</span>
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        `;
 
-            // Make POST request with streaming
-            const response = await fetch('/api/chat-stream', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ message })
-            });
+        assistantDiv.appendChild(assistantContent);
+        chatContainer.appendChild(assistantDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            const data = await response.json();
+        // Create EventSource connection
+        const encodedMessage = encodeURIComponent(query);
+        const eventSource = new EventSource(`/api/chat-stream?message=${encodedMessage}`);
 
-            // Check if response was not ok (error status code)
-            if (!response.ok || data.error) {
-                setLoading(false);
-                throw new Error(data.error || data.detail || 'An error occurred while getting a response');
+        // Handle message events
+        eventSource.onmessage = (event) => {
+            const data = event.data;
+
+            // Check for end of stream
+            if (data === "[DONE]") {
+                eventSource.close();
+                enableInput();
+                return;
             }
 
-            // Set up streaming response handler
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
+            // Extract sources if present
+            let displayText = data;
+            let sourceText = null;
 
-            try {
-                while (true) {
-                    const {value, done} = await reader.read();
-                    if (done) break;
+            if (data.includes("Sources:")) {
+                const parts = data.split("Sources:");
+                displayText = parts[0].trim();
+                sourceText = parts[1].trim();
+            }
 
-                    const text = decoder.decode(value);
-                    const lines = text.split('\n');
+            // Hide the loading animation on first message
+            const loadingElement = assistantContent.querySelector('.typing-dots')?.parentElement;
+            if (loadingElement) {
+                assistantContent.innerHTML = `<span class="font-bold">Assistant:</span> ${displayText}`;
+            } else {
+                // Update existing content
+                assistantContent.innerHTML += displayText;
+            }
 
-                    lines.forEach(line => {
-                        if (line.startsWith('data: ')) {
-                            const data = line.slice(6);
-                            if (data === '[DONE]') {
-                                setLoading(false);
-                                return;
-                            }
-
-                            // Handle sources separately
-                            if (data.startsWith('Sources:')) {
-                                const sourceDiv = document.createElement('div');
-                                sourceDiv.className = 'source-citation';
-                                sourceDiv.textContent = data;
-                                responseDiv.appendChild(sourceDiv);
-                                return;
-                            }
-
-                            // Append word and add space
-                            responseText += data + ' ';
-                            currentParagraph.textContent = responseText;
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                        }
-                    });
+            // Add sources if present
+            if (sourceText) {
+                let sourcesDiv = assistantDiv.querySelector('.sources');
+                if (!sourcesDiv) {
+                    sourcesDiv = document.createElement('div');
+                    sourcesDiv.className = 'mt-2 text-sm text-gray-600 italic sources';
+                    assistantDiv.appendChild(sourcesDiv);
                 }
-            } catch (error) {
-                console.error('Stream reading error:', error);
-                if (!responseText) {
-                    currentParagraph.textContent = error.message || 'Error: Unable to get response';
-                }
-                setLoading(false);
+                sourcesDiv.textContent = `Sources: ${sourceText}`;
             }
-        } catch (error) {
-            //update last message with error
-            const lastMessage = chatContainer.querySelector('.message.assistant-message:last-child');
-            if (lastMessage) {
-                const errorParagraph = document.createElement('p');
-                errorParagraph.textContent = error.message || 'Error: Unable to get response';
-                lastMessage.appendChild(errorParagraph);
-            }
-            setLoading(false);
-        }
-    };
 
-    sendButton.addEventListener('click', handleSubmit);
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit();
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+
+        // Handle errors
+        eventSource.onerror = (error) => {
+            console.error('EventSource error:', error);
+
+            if (assistantContent.querySelector('.typing-dots')) {
+                assistantContent.innerHTML = `<span class="font-bold">Assistant:</span> <span class="text-red-600">Connection error. Please try again.</span>`;
+            }
+
+            eventSource.close();
+            enableInput();
+        };
+    }
+
+    function enableInput() {
+        userInput.disabled = false;
+        sendButton.disabled = false;
+        sendButton.classList.remove('opacity-50');
+        userInput.focus();
+    }
+
+    // Event listeners
+    sendButton.addEventListener('click', sendQuery);
+    userInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendQuery();
         }
     });
 });

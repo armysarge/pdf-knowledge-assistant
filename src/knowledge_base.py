@@ -39,14 +39,30 @@ class KnowledgeBase:
         index_path = os.path.join(self.embeddings_dir, "faiss_index")
         if os.path.exists(index_path):
             try:
+                print(f"Found vector store at {index_path}")
+                print(f"Checking index files...")
+
+                if not os.path.exists(os.path.join(index_path, "index.faiss")):
+                    print("Missing index.faiss file")
+                    return False
+
+                if not os.path.exists(os.path.join(index_path, "index.pkl")):
+                    print("Missing index.pkl file")
+                    return False
+
+                print("Loading vector store...")
                 self.vector_store = FAISS.load_local(
                     index_path,
                     self.embedding_model,
                     allow_dangerous_deserialization=True
                 )
+                print("Vector store loaded successfully")
                 return True
             except Exception as e:
-                print(f"Error loading vector store from {index_path}: {e}")
+                print(f"Error loading vector store: {str(e)}")
+                print(f"Error type: {type(e)}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
                 self.vector_store = None
                 return False
         print(f"No vector store found at {index_path}")

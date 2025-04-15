@@ -1,8 +1,9 @@
 """
-API module for the PDF Knowledge Assistant
+API module for the PDF Knowledge Assistant with true streaming support
 """
 
 import os
+import asyncio
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,14 +11,37 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-import asyncio
 
 from src.pdf_processor import PDFProcessor
 from src.knowledge_base import KnowledgeBase
-from src.chat_interface import ChatInterface
+from src.chat_interface import ChatInterface  # Import the updated ChatInterface
+
+# Request models
+class QueryRequest(BaseModel):
+    message: str
+
+class ProcessPDFRequest(BaseModel):
+    force_rebuild: bool = False
 
 # Initialize FastAPI app
 app = FastAPI(title="PDF Knowledge Assistant API")
+
+# Global variables
+kb = None
+chat_interface = None
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize knowledge base and chat interface on startup"""
+    global kb, chat_interface
+    print("Starting PDF Knowledge Assistant API...")
+    kb = KnowledgeBase()
+    if kb.check_knowledge_base_exists():
+        print("Knowledge base found, initializing chat interface...")
+        chat_interface = ChatInterface(kb)
+        print(f"Chat interface initialized: {chat_interface is not None}")
+    else:
+        print("No knowledge base found, waiting for /process-pdfs call")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -36,42 +60,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize knowledge base and chat interface
-kb = KnowledgeBase()
-chat_interface = None
-
-def initialize_chat_interface():
-    """Initialize the chat interface if knowledge base exists"""
-    global chat_interface
-    if kb.check_knowledge_base_exists():
-        chat_interface = ChatInterface(kb)
-        return True
-    return False
-
-# Try to initialize chat interface
-initialize_chat_interface()
-
-# Request and response models
-class QueryRequest(BaseModel):
-    message: str
-
-class ProcessPDFRequest(BaseModel):
-    force_rebuild: bool = False
-
 async def stream_chat_response(message: str):
-    """Generate streaming response from chat interface"""
+    """Generate true streaming response from chat interface"""
     try:
-        answer, sources = chat_interface.get_response(message)
+        # Use the new streaming response method
+        async for token, sources in chat_interface.get_streaming_response(message):
+            # Send each token as it's generated
+            yield f"data: {token}\n\n"
+            # Small delay to prevent overwhelming the client
+            await asyncio.sleep(0.01)
 
-        # Stream the response word by word
-        for word in answer.split():
-            yield f"data: {word} \n\n"
-            await asyncio.sleep(0.05)  # Add small delay between words
-
-        # Send sources as the final message
+        # Send sources as a separate message if available
         if sources:
             yield f"data: \n\nSources: {', '.join(sources)}\n\n"
 
+        # Signal that the stream is complete
         yield "data: [DONE]\n\n"
     except Exception as e:
         error_msg = str(e)
@@ -81,16 +84,45 @@ async def stream_chat_response(message: str):
 @app.post("/api/chat-stream")
 async def chat_stream(query: QueryRequest):
     """Stream a response from the chat interface"""
-    if not chat_interface or not kb.check_knowledge_base_exists():
+    return await handle_chat_stream(query.message)
+
+@app.get("/api/chat-stream")
+async def chat_stream_get(message: str):
+    """Stream a response from the chat interface (GET endpoint)"""
+    return await handle_chat_stream(message)
+
+async def handle_chat_stream(message: str):
+    """Common handler for both POST and GET endpoints"""
+    try:
+        if not chat_interface:
+            return StreamingResponse(
+                iter([
+                    "data: Knowledge base not initialized. Please process PDFs first by adding PDFs to the data/pdfs directory and calling the /process-pdfs endpoint.\n\n",
+                    "data: [DONE]\n\n"
+                ]),
+                media_type="text/event-stream"
+            )
+
+        if not kb.check_knowledge_base_exists():
+            return StreamingResponse(
+                iter([
+                    "data: Knowledge base not found. Please add PDFs to the data/pdfs directory and call the /process-pdfs endpoint.\n\n",
+                    "data: [DONE]\n\n"
+                ]),
+                media_type="text/event-stream"
+            )
         return StreamingResponse(
-            iter([f"data: Knowledge base not initialized. Please process PDFs first by adding PDFs to the data/pdfs directory and calling the /process-pdfs endpoint.\n\ndata: [DONE]\n\n"]),
+            stream_chat_response(message),
             media_type="text/event-stream"
         )
-
-    return StreamingResponse(
-        stream_chat_response(query.message),
-        media_type="text/event-stream"
-    )
+    except Exception as e:
+        return StreamingResponse(
+            iter([
+                f"data: {str(e)}\n\n",
+                "data: [DONE]\n\n"
+            ]),
+            media_type="text/event-stream"
+        )
 
 @app.get("/status")
 async def get_status():
@@ -132,3 +164,15 @@ async def process_pdfs(request: ProcessPDFRequest, background_tasks: BackgroundT
         )
 
     return {"status": "success", "message": f"Processed {len(documents)} documents"}
+
+# Add a test streaming endpoint
+@app.get("/test-stream")
+async def test_stream():
+    """Test SSE streaming with a simple counter"""
+    async def generate():
+        for i in range(20):
+            yield f"data: Testing streaming message {i}\n\n"
+            await asyncio.sleep(0.5)
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")

@@ -98,25 +98,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 eventSource.close();
                 enableInput();
                 return;
-            }
+            }            // Check for sources message
+            if (data.startsWith("SOURCES:")) {
+                // This is a sources message
+                const sourceText = data.substring(8); // Remove 'SOURCES:' prefix
 
-            // Extract sources if present
-            let displayText = data;
-            let sourceText = null;
+                let sourcesDiv = assistantDiv.querySelector('.sources');
+                if (!sourcesDiv) {
+                    sourcesDiv = document.createElement('div');
+                    sourcesDiv.className = 'mt-2 text-sm text-gray-600 italic sources';
+                    assistantDiv.appendChild(sourcesDiv);
+                }
+                sourcesDiv.textContent = `Sources: ${sourceText}`;
 
-            if (data.includes("Sources:")) {
-                const parts = data.split("Sources:");
-                displayText = parts[0].trim();
-                sourceText = parts[1].trim();
+                // Don't append this to content as it's not part of the answer
+                return;
             }
 
             // Hide the loading animation on first message
             const loadingElement = assistantContent.querySelector('.typing-dots')?.parentElement;
             if (loadingElement) {
-                assistantContent.innerHTML = `<span class="font-bold">Assistant:</span> ${displayText}`;
+                assistantContent.innerHTML = `<span class="font-bold">Assistant:</span> ${data}`;
             } else {
                 // Update existing content
-                assistantContent.innerHTML += displayText;
+                assistantContent.innerHTML += data;
             }
 
             // Add sources if present

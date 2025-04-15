@@ -63,16 +63,22 @@ app.add_middleware(
 async def stream_chat_response(message: str):
     """Generate true streaming response from chat interface"""
     try:
+        # Track sources during streaming
+        collected_sources = []
+
         # Use the new streaming response method
         async for token, sources in chat_interface.get_streaming_response(message):
             # Send each token as it's generated
             yield f"data: {token}\n\n"
+            # Remember the sources
+            if sources and not collected_sources:
+                collected_sources = sources
             # Small delay to prevent overwhelming the client
             await asyncio.sleep(0.01)
 
-        # Send sources as a separate message if available
-        if sources:
-            yield f"data: \n\nSources: {', '.join(sources)}\n\n"
+        # Send sources in a standardized format as the last message before DONE
+        if collected_sources:
+            yield f"data: SOURCES:{', '.join(collected_sources)}\n\n"
 
         # Signal that the stream is complete
         yield "data: [DONE]\n\n"

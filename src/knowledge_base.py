@@ -76,8 +76,8 @@ class KnowledgeBase:
             Boolean indicating if the knowledge base exists
         """
         exists = self.vector_store is not None
-        print(f"Knowledge base exists: {exists}")
-        print(f"Vector store: {self.vector_store}")
+        #print(f"Knowledge base exists: {exists}")
+        #print(f"Vector store: {self.vector_store}")
         return exists
 
     def add_documents(self, documents: List[Dict[str, Any]], force_rebuild: bool = False) -> None:

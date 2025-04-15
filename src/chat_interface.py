@@ -152,6 +152,45 @@ Answer: """
         self.console.print("[green]LLM model loaded successfully![/green]")
         return llm
 
+    def start_interactive_chat(self):
+        """Start an interactive chat session with the user."""
+        self.console.print("\n\n[bold green]PDF Knowledge Assistant[/bold green]")
+        self.console.print("Chat with your documents! Type 'exit' or 'quit' to end the session.\n")
+
+        # Check if knowledge base exists
+        if not self.knowledge_base.check_knowledge_base_exists():
+            self.console.print("[red]Error: Knowledge base not initialized. Please process PDFs first.[/red]")
+            return
+
+        while True:
+            query = input("\n[You]: ")
+
+            if query.lower() in ["exit", "quit", "q"]:
+                self.console.print("[yellow]Exiting chat session. Goodbye![/yellow]")
+                break
+
+            if not query.strip():
+                continue
+
+            try:
+                self.console.print("\n[AI]: ", end="")
+
+                # Get response using the get_response method
+                result, sources = self.get_response(query)
+                self.console.print(result)
+
+                # Display sources after response
+                if sources:
+                    self.console.print("\n[dim]Sources: " + ", ".join(sources) + "[/dim]")
+
+                # Add to message history
+                self.message_history.add_user_message(query)
+                self.message_history.add_ai_message(result)
+
+            except Exception as e:
+                self.console.print(f"\n[red]Error during conversation: {e}[/red]")
+                continue
+
     def _load_streaming_llm(self):
         """
         Load a separate LLM instance configured for streaming.
